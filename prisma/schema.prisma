@@ -1,0 +1,45 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id          Int       @id @default(autoincrement())
+  name        String
+  email       String    @unique
+  password    String
+  role        String    @default("user") // user, developer, admin
+  createdAt   DateTime  @default(now())
+  apps        App[]     @relation("UserApps")
+  downloads   Download[]
+}
+
+model App {
+  id          Int       @id @default(autoincrement())
+  title       String
+  description String?
+  category    String?
+  apkUrl      String
+  iconUrl     String?
+  screenshots String[]
+  version     String    @default("1.0.0")
+  isFree      Boolean   @default(true)
+  price       Float     @default(0.0)
+  createdAt   DateTime  @default(now())
+  developer   User      @relation("UserApps", fields: [developerId], references: [id])
+  developerId Int
+  downloads   Download[]
+}
+
+model Download {
+  id           Int      @id @default(autoincrement())
+  downloadedAt DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id])
+  userId       Int
+  app          App      @relation(fields: [appId], references: [id])
+  appId        Int
+}

@@ -23,6 +23,7 @@ app.use("/auth", authRoutes);
 
 // ✅ Serve files inside public/download as /download
 app.use("/download", express.static(path.join(__dirname, "..", "public", "download")));
+app.use("/apps", express.static(path.join(__dirname, "../public/apps")));
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`✅ Server running on http://localhost:${PORT}`));

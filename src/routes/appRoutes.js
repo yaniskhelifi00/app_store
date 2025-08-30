@@ -1,18 +1,18 @@
 import express from "express";
-import appController from "../controllers/appController.js";
+import * as appController from "../controllers/appController.js";
 
 const router = express.Router();
 
-// Upload a new app
-router.post("/upload", appController.uploadApp);
-
-// Download app
-router.get("/download", appController.appDownload);
+// Upload new app (APK + icon + screenshots)
+router.post("/upload", appController.uploadFiles, appController.uploadApp);
 
 // Get all apps
 router.get("/", appController.getAllApps);
 
-// Get one app by ID
+// Get app by ID
 router.get("/:id", appController.getAppById);
+
+// Download an app file
+router.get("/download/:fileName", appController.appDownload);
 
 export default router;

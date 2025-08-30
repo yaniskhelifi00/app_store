@@ -7,19 +7,41 @@ const prisma = new PrismaClient();
 // Register
 export const register = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, confirmPassword } = req.body;
 
+    // ✅ Check required fields
+    if (!name || !email || !password || !confirmPassword) {
+      return res.status(400).json({ error: "All fields are required" });
+    }
+
+    // ✅ Check passwords match
+    if (password !== confirmPassword) {
+      return res.status(400).json({ error: "Passwords do not match" });
+    }
+
+    //  Check if email already exists
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return res.status(400).json({ error: "Email already in use" });
+    }
+
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Create user
     const user = await prisma.user.create({
       data: { name, email, password: hashedPassword },
+      select: { id: true, name: true, email: true }, // return only safe fields
     });
 
     res.status(201).json({ message: "User registered", user });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
   }
 };
+
+
 
 // Login
 export const login = async (req, res) => {
@@ -38,7 +60,11 @@ export const login = async (req, res) => {
       { expiresIn: "1h" }
     );
 
-    res.json({ message: "Login successful", token });
+  res.json({
+    message: "Login successful",
+    token,
+    user: { id: user.id, name: user.name, email: user.email },
+  });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

@@ -30,7 +30,7 @@ model App {
   isFree      Boolean   @default(true)
   price       Float     @default(0.0)
   createdAt   DateTime  @default(now())
-  developer   User      @relation("UserApps", fields: [developerId], references: [id])
+  developer   User?      @relation("UserApps", fields: [developerId], references: [id])
   developerId Int
   downloads   Download[]
 }

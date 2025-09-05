@@ -6,7 +6,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import appRoutes from "./routes/appRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
-
+import testRoutes from "./routes/testRoutes.js";
 
 
 dotenv.config();
@@ -23,8 +23,9 @@ app.use(cors({ origin: "*" }));
 // Routes
 app.use("/app", appRoutes);
 app.use("/auth", authRoutes);
+app.use("/test", testRoutes);
 app.use("/apps", express.static(path.join(__dirname, "../public/apps")));
-console.log("Static apps dir:", path.join(__dirname, "../public/apps"));
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`✅ Server running on http://localhost:${PORT}`));

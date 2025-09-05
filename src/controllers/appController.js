@@ -1,77 +1,116 @@
 import { PrismaClient } from "@prisma/client";
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs";
 import multer from "multer";
 import { createAppFolders } from "../utils/createFolders.js";
-
 
 const prisma = new PrismaClient();
 
 // Needed for __dirname in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const baseUrl = "http://localhost:5000";
-// Configure multer storage
+
+// 📂 Base folder for apps
+const appsDir = path.join(__dirname, "../../public/apps");
+
+// Make sure base dir exists
+if (!fs.existsSync(appsDir)) {
+  fs.mkdirSync(appsDir, { recursive: true });
+}
+
+// ---- Multer setup ----
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const { appPath, screenshotsPath } = createAppFolders(req.body.title);
 
-    if (file.fieldname === "apk" || file.fieldname === "icon") cb(null, appPath);
-    else if (file.fieldname === "screenshots") cb(null, screenshotsPath);
+    if (file.fieldname === "apk" || file.fieldname === "icon") {
+      cb(null, appPath);
+    } else if (file.fieldname === "screenshots") {
+      cb(null, screenshotsPath);
+    }
   },
   filename: (req, file, cb) => {
-    cb(null, file.originalname);
+    cb(null, Date.now() + "-" + file.originalname);
   },
 });
 
-export const uploadFiles = multer({ storage }).fields([
-  { name: "apk", maxCount: 1 },
-  { name: "icon", maxCount: 1 },
-  { name: "screenshots", maxCount: 10 },
-]);
+const upload = multer({ storage });
 
-export const uploadApp = async (req, res) => {
-  try {
-    const {
-      title,
-      description,
-      category,
-      version,
-      isFree,
-      price,
-    } = req.body;
-    const developerId = req.user.id;
-    const apkFile = req.files?.["apk"] ? req.files["apk"][0].filename : null;
-    const iconFile = req.files?.["icon"] ? req.files["icon"][0].filename : null;
-    const screenshotsFiles = req.files?.["screenshots"] || [];
+export const uploadApp = [
+  // middleware chain: multer first, then handler
+  upload.fields([
+    { name: "icon", maxCount: 1 },
+    { name: "apk", maxCount: 1 },
+    { name: "screenshots", maxCount: 10 },
+  ]),
 
-    const apkUrl = apkFile ? `/apps/${title}/${apkFile}` : null;
-    const iconUrl = iconFile ? `/apps/${title}/${iconFile}` : null;
-    const screenshots = screenshotsFiles.map(
-      (file) => `/apps/${title}/screenshots/${file.filename}`
-    );
+  async (req, res) => {
+    try {
+      const { title, description, category, version, isFree, price } = req.body;
 
-    const newApp = await prisma.app.create({
-      data: {
-        title,
-        description,
-        category,
-        apkUrl,
-        iconUrl,
-        screenshots,
-        version: version || "1.0.0",
-        isFree: isFree === "true" || isFree === true,
-        price: parseFloat(price) || 0,               // Float
-        developerId: parseInt(developerId), 
-      },
-    });
+      if (!title) {
+        return res.status(400).json({ error: "App title is required" });
+      }
 
-    res.status(201).json(newApp);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Server error" });
-  }
-};
+      // 📂 Create folder for this app
+      const appDir = path.join(appsDir, title);
+      const screenshotsDir = path.join(appDir, "screenshots");
+
+      if (!fs.existsSync(appDir)) fs.mkdirSync(appDir, { recursive: true });
+      if (!fs.existsSync(screenshotsDir)) fs.mkdirSync(screenshotsDir, { recursive: true });
+
+      // ✅ Save APK
+      let apkPath = null;
+      if (req.files?.apk?.[0]) {
+        const apkFile = req.files.apk[0];
+        apkPath = path.join(appDir, apkFile.originalname);
+        fs.renameSync(apkFile.path, apkPath);
+      }
+
+      // ✅ Save Icon
+      let iconPath = null;
+      if (req.files?.icon?.[0]) {
+        const iconFile = req.files.icon[0];
+        iconPath = path.join(appDir, iconFile.originalname);
+        fs.renameSync(iconFile.path, iconPath);
+      }
+
+      // ✅ Save Screenshots
+      const screenshotPaths = [];
+      if (req.files?.screenshots) {
+        req.files.screenshots.forEach((s) => {
+          const targetPath = path.join(screenshotsDir, s.originalname);
+          fs.renameSync(s.path, targetPath);
+          screenshotPaths.push(`/apps/${title}/screenshots/${s.originalname}`);
+        });
+      }
+
+      // ✅ Save app record in DB
+      const newApp = await prisma.app.create({
+        data: {
+          title,
+          description,
+          category,
+          version,
+          isFree: isFree === "true",
+          price: parseFloat(price) || 0,
+          apkPath: apkPath ? `/apps/${title}/${path.basename(apkPath)}` : null,
+          iconPath: iconPath ? `/apps/${title}/${path.basename(iconPath)}` : null,
+          screenshots: screenshotPaths,
+          developerId: req.user.id, // linked to the logged-in dev
+        },
+      });
+
+      res.json({ success: true, app: newApp });
+    } catch (err) {
+      console.error("❌ Upload app error:", err);
+      res.status(500).json({ error: "Upload failed" });
+    }
+  },
+];
+
+
 
 export const getAllApps = async (req, res) => {
   try {
